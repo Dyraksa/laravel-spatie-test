@@ -19,8 +19,12 @@ use Illuminate\Support\Facades\Route;
 Route::group(['prefix' => '/auth',['middleware'=>'throttle:20,5']],function () {
     Route::post('register','Auth\RegisterController@register');
     Route::post('login','Auth\LoginController@login');
+    Route::apiResource('roles','permission\RoleController');
+    Route::apiResource('permission','permission\PermissionController');
+    Route::apiResource('user','permission\UserController');
 });
 Route::group(['middleware' => 'jwt.auth','cors'], function () {
     Route::get('/me','UserController@me');
     Route::delete('/logout','UserController@Logout');
+
 });

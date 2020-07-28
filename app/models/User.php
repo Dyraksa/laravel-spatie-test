@@ -6,10 +6,11 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
-
+use Spatie\Permission\Traits\HasRoles as HasRoles;
 class User extends Authenticatable implements JWTSubject
 {
     use Notifiable;
+    use HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -47,5 +48,11 @@ class User extends Authenticatable implements JWTSubject
     {
         return [];
     }
+    public function role(){
+        return $this->hasOne(ModelHasRoles::class,"model_id","id")->with('role');
+    }
 
+    public function getRoleAttribute($value){
+        return $this->role()->first()->role->name;
+    }
 }
