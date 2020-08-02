@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\api\permission;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\User;
+use App\models\User;
 use Spatie\Permission\Models\Role;
 use DB;
 use Hash;
+use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
@@ -15,28 +16,23 @@ class UserController extends Controller
      * Display a listing of the resource.
      *function __construct()
     {
-         $this->middleware('permission:user-list');
-         $this->middleware('permission:user-create', ['only' => ['create','store']]);
-         $this->middleware('permission:user-edit', ['only' => ['edit','update']]);
-         $this->middleware('permission:user-delete', ['only' => ['destroy']]);
+        $this->middleware('permission:user-list');
+        $this->middleware('permission:user-create', ['only' => ['create','store']]);
+        $this->middleware('permission:user-edit', ['only' => ['edit','update']]);
+        $this->middleware('permission:user-delete', ['only' => ['destroy']]);
     }
      * @return \Illuminate\Http\Response
      */
+
     public function index(Request $request)
     {
-        $data = User::orderBy('id','DESC')->paginate($request->number);
+        $data = User::with('roles')->get();
         return response()->json([
             'success'=>true,
-            'data'=>$data,
+            'user'=>$data,
         ]);
     }
 
-
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
     public function create()
     {
         $roles = Role::pluck('name','name')->all();
@@ -46,68 +42,34 @@ class UserController extends Controller
         ]);
     }
 
-
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
     public function store(Request $request)
     {
-        $this->validate($request, [
-            'name' => 'required',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|same:confirm-password',
-            'roles' => 'required'
-        ]);
+        $validate = $this->validator($request->all());
+        if(!$validate->fails()){
+            $input = $request->all();
+            $input['password'] = Hash::make($input['password']);
+            $user = User::create($input);
+            $user->assignRole($request->input('roles'));
+            return response()->json([
+                'success'=>false,
+                'message'=>[
+                    'upload is success',
+                ]
+            ]);
+        }else{
+            return response()->json([
+                'success'=>false,
+                'errors'=>$validate->errors(),
+            ]);
+        }
 
-
-        $input = $request->all();
-        $input['password'] = Hash::make($input['password']);
-
-
-        $user = User::create($input);
-        $user->assignRole($request->input('roles'));
-
-
-        return response()->json([
-            'success'=>false,
-            'message'=>[
-                'upload is success',
-            ]
-        ]);
     }
-
-
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function show($id)
+    public function edit(Request $request,$id)
     {
-        $user = User::find($id);
-        return response()->json([
-            'success'=>true,
-            'user'=>$user,
-        ]);
-    }
-
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function edit($id)
-    {
+        $id = $request->id;
         $user = User::find($id);
         $roles = Role::pluck('name','name')->all();
         $userRole = $user->roles->pluck('name','name')->all();
-
 
         return response()->json([
             'success'=>true,
@@ -127,32 +89,32 @@ class UserController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $this->validate($request, [
-            'name' => 'required',
-            'email' => 'required|email|unique:users,email,'.$id,
-            'password' => 'required|same:confirm-password',
-            'roles' => 'required'
-        ]);
-
-
-        $input = $request->all();
-        if(!empty($input['password'])){
-            $input['password'] = Hash::make($input['password']);
+        $validate = $this->validator($request->all());
+        if(!$validate->fails()){
+            $id = $request->id;
+            $input = $request->all();
+            if(!empty($input['password'])){
+                $input['password'] = Hash::make($input['password']);
+            }else{
+                $input = array_except($input,array('password'));
+            }
+            $user = User::find($id);
+            $user->update($input);
+            DB::table('model_has_roles')->where('model_id',$id)->delete();
+            $user->assignRole($request->input('roles'));
+            return response()->json([
+                'success'=>true,
+                'message'=>[
+                    'update is success'
+                ]
+            ]);
         }else{
-            $input = array_except($input,array('password'));
+            return response()->json([
+                'success'=>false,
+                'errrors'=>$validate->errors(),
+            ],422);
         }
 
-
-        $user = User::find($id);
-        $user->update($input);
-        DB::table('model_has_roles')->where('model_id',$id)->delete();
-
-
-        $user->assignRole($request->input('roles'));
-
-
-        return redirect()->route('users.index')
-                        ->with('success','User updated successfully');
     }
 
 
@@ -162,10 +124,25 @@ class UserController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Request $request,$id)
     {
+        $id = $request->id;
         User::find($id)->delete();
-        return redirect()->route('users.index')
-                        ->with('success','User deleted successfully');
+        return response()->json([
+            'success'=>true,
+            'message'=>[
+                'delete is successfully'
+            ]
+        ]);
     }
+    protected function validator(array $data)
+    {
+        return Validator::make($data, [
+            'name' => 'required',
+            'email' => 'required|email|unique:users,email,',
+            'password' => 'required',
+            'roles' => 'required'
+        ]);
+    }
+
 }

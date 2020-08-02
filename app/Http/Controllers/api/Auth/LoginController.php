@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -32,6 +33,8 @@ class LoginController extends Controller
 
     public function login(Request $request)
     {
+        $this->validator($request->all())->validate();
+
         if($this->hasTooManyLoginAttempts($request)){
             $this->fireLockoutEvent($request);
             return response()->json([
@@ -72,4 +75,11 @@ class LoginController extends Controller
         ],200);
     }
 
+    protected function validator(array $data)
+    {
+        return Validator::make($data,[
+            'email'=>'required',
+            'password'=>'required',
+        ]);
+    }
 }

@@ -1,36 +1,36 @@
 <?php
 
 namespace App\Http\Controllers\api\permission;
+
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use App\RoleHasPermission;
+use Illuminate\Support\Facades\Validator;
 
 class PermissionController extends Controller
 {
 
     /**
      * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    function __construct()
+     *function __construct()
     {
          $this->middleware('permission:permission-list');
          $this->middleware('permission:permission-create', ['only' => ['create','store']]);
          $this->middleware('permission:permission-edit', ['only' => ['edit','update']]);
          $this->middleware('permission:permission-delete', ['only' => ['destroy']]);
     }
-    /**
-     * Display a listing of the resource.
-     *
      * @return \Illuminate\Http\Response
      */
+
     public function index()
     {
         $permissions = Permission::all();
-        return view('admin.permissions.index')->with('permissions', $permissions);
+        return response()->json([
+            'success' => true,
+            'data' => $permissions,
+        ]);
     }
 
     /**
@@ -41,7 +41,10 @@ class PermissionController extends Controller
     public function create()
     {
         $roles = Role::get();
-        return view('admin.permissions.create')->with('roles', $roles);
+        return response()->json([
+            'success' => true,
+            'data' => $roles,
+        ]);
     }
 
     /**
@@ -52,27 +55,32 @@ class PermissionController extends Controller
      */
     public function store(Request $request)
     {
-        $this->validate($request, [
-            'name'=>'required|max:40',
-        ]);
-
-        $name = strtolower($request['name']);
-        $permission = new Permission();
-        $permission->name = $name;
-
-        $roles = $request['roles'];
-
-        $permission->save();
-
-        if (!empty($request['roles'])) {
-            foreach ($roles as $role) {
-                $r = Role::where('id', '=', $role)->firstOrFail();
-                $permission = Permission::where('name', '=', $name)->first();
-                $r->givePermissionTo($permission);
+        $validate = $this->validator($request->all());
+        if (!$validate->fails()) {
+            $name = strtolower($request['name']);
+            $permission = new Permission();
+            $permission->name = $name;
+            $roles = $request['roles'];
+            $permission->save();
+            if (!empty($request['roles'])) {
+                foreach ($roles as $role) {
+                    $r = Role::where('id', '=', $role)->firstOrFail();
+                    $permission = Permission::where('name', '=', $name)->first();
+                    $r->givePermissionTo($permission);
+                }
             }
+            return response()->json([
+                'success' => true,
+                'message' => [
+                    'upload is successfulyy'
+                ]
+            ]);
+        } else {
+            return response()->json([
+                'success' => true,
+                'errors' => $validate->errors(),
+            ]);
         }
-
-        return redirect()->route('admin.permissions.index')->with('flash_message','Permission'. $permission->name.' added!');
     }
 
     /**
@@ -81,11 +89,18 @@ class PermissionController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        $id = $request->id;
         $permission = Permission::find($id);
-        $permissionRoles = Role::join("role_has_permissions as r","r.role_id","=","roles.id")->where("r.permission_id",$id)->get();
-         return view('admin.permissions.show',compact('permission','permissionRoles'));
+        $permissionRoles = Role::join("role_has_permissions as r", "r.role_id", "=", "roles.id")->where("r.permission_id", $id)->get();
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'permission' => $permission,
+                'permissionroles' => $permissionRoles,
+            ]
+        ]);
     }
 
     /**
@@ -94,12 +109,13 @@ class PermissionController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function edit($id)
+    public function edit(Request $request, $id)
     {
+        $id = $request->id;
         $permission = Permission::findOrFail($id);
         $roles = Role::get();
-        $permissionRoles = RoleHasPermission::where("permission_id",$id)->pluck('role_id','role_id')->all();
-        return view('admin.permissions.edit', compact('permission','roles','permissionRoles'));
+        $permissionRoles = RoleHasPermission::where("permission_id", $id)->pluck('role_id', 'role_id')->all();
+        return view('admin.permissions.edit', compact('permission', 'roles', 'permissionRoles'));
     }
 
     /**
@@ -111,16 +127,25 @@ class PermissionController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $this->validate($request, [
-            'name'=>'required|max:40',
-        ]);
-
-        $permission = Permission::find($id);
-        $permission->name = strtolower($request->input('name'));
-        $permission->save();
-        $permission->syncRoles($request->input('role'));
-        return redirect()->route('admin.permissions.index') ->with('flash_message','Permission'. $permission->name.' updated!');
-
+        $id = $request->id;
+        $validate = $this->validator($request->all());
+        if (!$validate->fails()) {
+            $permission = Permission::find($id);
+            $permission->name = $request->input('name');
+            $permission->save();
+            $permission->syncRoles($request->input('role'));
+            return response()->json([
+                'success' => true,
+                'message' => [
+                    'update is successfully',
+                ]
+            ]);
+        } else {
+            return response()->json([
+                'success' => true,
+                'errors' => $validate->errors(),
+            ]);
+        }
     }
 
     /**
@@ -129,20 +154,31 @@ class PermissionController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-
+        $id = $request->id;
         $permission = Permission::findOrFail($id);
         if ($permission->name == "admin") {
-                return redirect()->route('permissions.index')
-                ->with('flash_message',
-                 'Cannot delete this Permission!');
-            }
-
-            $permission->delete();
-
-            return redirect()->route('permissions.index')
-                ->with('flash_message',
-                 'Permission deleted!');
+            return response()->json([
+                'message' => [
+                    'Cannot delete this Permission!'
+                ]
+            ]);
         }
+        $permission->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => [
+                'permission delete is successfully',
+            ]
+        ]);
+    }
+
+    protected function validator(array $data)
+    {
+        return Validator::make($data, [
+            'name' => 'required|max:40'
+        ]);
+    }
 }

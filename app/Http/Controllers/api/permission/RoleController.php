@@ -7,14 +7,13 @@ use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use DB;
+use Illuminate\Support\Facades\Validator;
+
 class RoleController extends Controller
 {
     /**
      * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    function __construct()
+     *function __construct()
     {
          $this->middleware('permission:role-list');
          $this->middleware('permission:role-create', ['only' => ['create','store']]);
@@ -22,6 +21,9 @@ class RoleController extends Controller
          $this->middleware('permission:role-delete', ['only' => ['destroy']]);
          $this->middleware('permission:role-show', ['only' => ['show']]);
     }
+     * @return \Illuminate\Http\Response
+     */
+
 
 
     /**
@@ -31,9 +33,11 @@ class RoleController extends Controller
      */
     public function index(Request $request)
     {
-        $roles = Role::orderBy('id','DESC')->paginate(5);
-        return view('admin.roles.index',compact('roles'))
-            ->with('i', ($request->input('page', 1) - 1) * 5);
+        $roles = Role::orderBy('id','DESC')->paginate($request->number);
+        return response()->json([
+            'success'=>true,
+            'data'=>$roles,
+        ]);
     }
 
 
@@ -45,7 +49,10 @@ class RoleController extends Controller
     public function create()
     {
         $permission = Permission::get();
-        return view('admin.roles.create',compact('permission'));
+        return response()->json([
+            'success'=>true,
+            'data'=>$permission,
+        ]);
     }
 
 
@@ -57,18 +64,22 @@ class RoleController extends Controller
      */
     public function store(Request $request)
     {
-        $this->validate($request, [
-            'name' => 'required|unique:roles,name',
-            'permission' => 'required',
-        ]);
-
-
-        $role = Role::create(['name' => $request->input('name')]);
-        $role->syncPermissions($request->input('permission'));
-
-
-        return redirect()->route('roles.index')
-                        ->with('success','Role created successfully');
+        $validate = $this->validator($request->all());
+        if(!$validate->fails()){
+            $role = Role::create(['name' => $request->input('name')]);
+            $role->syncPermissions($request->input('permission'));
+            return response()->json([
+                'success'=>true,
+                'message'=>[
+                    'upload is successfully',
+                ]
+            ]);
+        }else{
+            return response()->json([
+                'success'=>false,
+                'message'=>$validate->errors(),
+            ]);
+        }
     }
     /**
      * Display the specified resource.
@@ -76,15 +87,20 @@ class RoleController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        $id = $request->id;
         $role = Role::find($id);
         $rolePermissions = Permission::join("role_has_permissions","role_has_permissions.permission_id","=","permissions.id")
             ->where("role_has_permissions.role_id",$id)
             ->get();
-
-
-        return view('roles.show',compact('role','rolePermissions'));
+        return response()->json([
+            'success'=>true,
+            'data'=>[
+                'role'=>$role,
+                'rolepermission'=>$rolePermissions,
+            ]
+        ]);
     }
 
 
@@ -94,14 +110,21 @@ class RoleController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function edit($id)
+    public function edit(Request $request,$id)
     {
         $role = Role::find($id);
         $permission = Permission::get();
         $rolePermissions = DB::table("role_has_permissions")->where("role_has_permissions.role_id",$id)
             ->pluck('role_has_permissions.permission_id','role_has_permissions.permission_id')
             ->all();
-        return view('admin.roles.edit',compact('role','permission','rolePermissions'));
+        return response()->json([
+            'success'=>true,
+            'data'=>[
+                'role'=>$role,
+                'permission'=>$permission,
+                'rollpermission'=>$rolePermissions,
+            ]
+        ]);
     }
 
 
@@ -114,21 +137,26 @@ class RoleController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $this->validate($request, [
-            'name' => 'required',
-            'permission' => 'required',
-        ]);
+        $id = $request->id;
+        $validate = $this->validator($request->all());
+        if(!$validate->fails()){
+            $role = Role::find($id);
+            $role->name = $request->input('name');
+            $role->save();
+            $role->syncPermissions($request->input('permission'));
+            return response()->json([
+                'success'=>true,
+                'message'=>[
+                    'update is successfully',
+                ]
+            ]);
+        }else{
+            return response()->json([
+                'success'=>false,
+                'message'=>$validate->errors(),
+            ]);
+        }
 
-
-        $role = Role::find($id);
-        $role->name = $request->input('name');
-        $role->save();
-
-        $role->syncPermissions($request->input('permission'));
-
-
-        return redirect()->route('roles.index')
-                        ->with('success','Role updated successfully');
     }
     /**
      * Remove the specified resource from storage.
@@ -136,10 +164,23 @@ class RoleController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
+        $id = $request->id;
         DB::table("roles")->where('id',$id)->delete();
-        return redirect()->route('roles.index')
-                        ->with('success','Role deleted successfully');
+        return response()->json([
+            'success'=>true,
+            'message'=>[
+                'Role deleted successfully'
+            ]
+        ]);
+    }
+
+    protected function validator(array $data)
+    {
+        return Validator::make($data, [
+            'name' => 'required|unique:roles,name',
+            'permission' => 'required',
+        ]);
     }
 }
