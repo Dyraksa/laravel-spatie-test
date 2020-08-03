@@ -14,4 +14,13 @@ class Product extends Model
         'status',
     ];
 
+    public function photos()
+    {
+        return $this->morphMany(Product::class, 'imageable');
+    }
+
+    public function Category()
+    {
+        return $this->belongsToMany(Category::class,'product_categories')->withTimestamps();
+    }
 }

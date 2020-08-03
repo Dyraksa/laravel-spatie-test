@@ -60,6 +60,12 @@ Route::group(['middleware' => 'jwt.auth','cors'], function () {
     //end here
 
     //stated product controller
-
+    Route::get('products','ProductsController@index');
+    Route::get('products/create','ProductsController@create');
+    Route::get('products/show/{id}','ProductsController@show');
+    Route::get('products/edit/{id}','ProductsController@edit');
+    Route::post('products/store','ProductsController@store');
+    Route::put('products/update/{id}','ProductsController@update');
+    Route::delete('products/delete/{id}','ProductsController@destroy');
     //end here
 });
